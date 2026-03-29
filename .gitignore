@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+build/
+dist/
+*.spec
+
+# Databases & Credentials
+kis_secret.json
+kis_token.json
+gap_stock_auto.db
+financial_db.json
+.env
+telegram_config.txt
+
+# Logs & Temporary Files
+*.log
+docs_cache/
+*.bak
+*.png
+*.xlsx
+
+# AppData / Gemini
+.gemini/
+.agents/
+.agent/
+_agents/
+_agent/
+brain/
