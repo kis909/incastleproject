@@ -170,11 +170,17 @@ def main():
     # 매도 타겟 가격 전일 저가
     target_price_df = low_df.shift(1)
     
-    print("\n코스피 지수 데이터 수집 중...")
-    kospi = yf.download("^KS11", start="2020-01-01", end=end_date)
-    kospi_returns = kospi['Close'].pct_change().fillna(0) if not kospi.empty else pd.Series(dtype=float)
+    print("\n지수 데이터 수집 및 필터 계산 중...")
+    kospi_idx = yf.download("^KS11", start="2019-01-01", end=end_date)['Close'].squeeze()
+    kosdaq_idx = yf.download("^KQ11", start="2019-01-01", end=end_date)['Close'].squeeze()
+    
+    kospi_ma20 = kospi_idx.rolling(20).mean()
+    kosdaq_ma20 = kosdaq_idx.rolling(20).mean()
+    
+    cond_kospi_uptrend = kospi_idx > kospi_ma20
+    cond_kosdaq_uptrend = kosdaq_idx > kosdaq_ma20
 
-    print("\n백테스팅 시뮬레이션 중... (20일 강제청산 적용)")
+    print("\n백테스팅 시뮬레이션 중... (지수 필터 + 20일 강제청산 적용)")
     
     # 시뮬레이션 상태 변수
     initial_cash = 20000000
@@ -187,7 +193,17 @@ def main():
     # 2020년부터 백테스팅 시작
     dates = close_df.loc['2020-01-01':].index
     
+    # 날짜 정합성 확인을 위한 타임존 제거
+    cond_kospi_uptrend.index = cond_kospi_uptrend.index.tz_localize(None)
+    cond_kosdaq_uptrend.index = cond_kosdaq_uptrend.index.tz_localize(None)
+    
     for i, current_date in enumerate(dates):
+        # 당일 지수 상태 확인 (타임존 무시하고 매칭)
+        look_date = current_date.replace(tzinfo=None)
+        is_kospi_ok = cond_kospi_uptrend.at[look_date] if look_date in cond_kospi_uptrend.index else False
+        is_kosdaq_ok = cond_kosdaq_uptrend.at[look_date] if look_date in cond_kosdaq_uptrend.index else False
+
+
         current_date_str = current_date.strftime('%Y-%m-%d')
         
         # 1. 포지션 보유일수 및 당일 가격 확인 / 모니터링 (매도 로직)
@@ -272,6 +288,11 @@ def main():
             for sym in buy_candidates:
                 if sym in positions: continue
                 
+                # [Alpha] 지수 필터 적용: 하락장에서는 신규 매수 금지
+                is_ks = sym.endswith('.KS')
+                index_ok = is_kospi_ok if is_ks else is_kosdaq_ok
+                if not index_ok: continue 
+
                 c_price = close_df.at[current_date, sym]
                 if pd.isna(c_price): continue
                 
