@@ -79,6 +79,27 @@ def hashkey(datas):
     return res.json()["HASH"]
 
 # ----------------- KIS API 주요 기능 -----------------
+def kis_api_request(method, url, **kwargs):
+    """ KIS API 요청 공통 핸들러 (재시도 및 타임아웃 처리) """
+    if 'timeout' not in kwargs:
+        kwargs['timeout'] = 15
+    
+    for i in range(3):
+        try:
+            if method.upper() == 'GET':
+                res = requests.get(url, **kwargs)
+            else:
+                res = requests.post(url, **kwargs)
+            res.raise_for_status()
+            return res.json()
+        except Exception as e:
+            if i < 2:
+                print(f"{ts()} API 통신 에러... {i+1}차 재시도 중: {e}")
+                time.sleep(2)
+            else:
+                print(f"{ts()} API 통신 최종 실패: {e}")
+    return None
+
 def get_current_price(token, symbol):
     """ 특정 종목의 현재 실시간 현재가, 고가 조회 """
     symbol_code = symbol.replace(".KS", "").replace(".KQ", "")
@@ -87,16 +108,16 @@ def get_current_price(token, symbol):
         "authorization": f"Bearer {token}",
         "appKey": APP_KEY,
         "appSecret": APP_SECRET,
-        "tr_id": "FHKST01010100"  # 주식현재가시세
+        "tr_id": "FHKST01010100"
     }
     url = f"{URL_BASE}/uapi/domestic-stock/v1/quotations/inquire-price"
     params = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": symbol_code}
-    res = requests.get(url, headers=headers, params=params)
-    data = res.json()
-    if data['rt_cd'] == '0':
+    
+    data = kis_api_request('GET', url, headers=headers, params=params)
+    if data and data.get('rt_cd') == '0':
         return {
-            'close': int(data['output']['stck_prpr']),   # 현재가 (종가)
-            'high': int(data['output']['stck_hgpr'])     # 당일 고가
+            'close': int(data['output']['stck_prpr']),
+            'high': int(data['output']['stck_hgpr'])
         }
     return None
 
@@ -110,31 +131,23 @@ def get_account_balance(token):
         "authorization": f"Bearer {token}",
         "appKey": APP_KEY,
         "appSecret": APP_SECRET,
-        "tr_id": tr_id  # 주식계좌잔고 (모의: VTTC8434R, 실전: TTTC8434R)
+        "tr_id": tr_id
     }
     url = f"{URL_BASE}/uapi/domestic-stock/v1/trading/inquire-balance"
     params = {
-        "CANO": CANO,
-        "ACNT_PRDT_CD": ACNT_PRDT_CD,
-        "AFHR_FLPR_YN": "N",
-        "OFL_YN": "",
-        "INQR_DVSN": "02",
-        "UNPR_DVSN": "01",
-        "FUND_STTL_ICLD_YN": "N",
-        "FNCG_AMT_AUTO_RDPT_YN": "N",
-        "PRCS_DVSN": "01",
-        "CTX_AREA_FK100": "",
-        "CTX_AREA_NK100": ""
+        "CANO": CANO, "ACNT_PRDT_CD": ACNT_PRDT_CD, "AFHR_FLPR_YN": "N", "OFL_YN": "",
+        "INQR_DVSN": "02", "UNPR_DVSN": "01", "FUND_STTL_ICLD_YN": "N",
+        "FNCG_AMT_AUTO_RDPT_YN": "N", "PRCS_DVSN": "01", "CTX_AREA_FK100": "", "CTX_AREA_NK100": ""
     }
-    res = requests.get(url, headers=headers, params=params)
-    data = res.json()
-    if data['rt_cd'] == '0' and data['output2']:
+    
+    data = kis_api_request('GET', url, headers=headers, params=params)
+    if data and data.get('rt_cd') == '0' and data.get('output2'):
         row = data['output2'][0]
         cash = 0
         if 'ord_psbl_cash' in row:
-            cash = int(row['ord_psbl_cash']) # 실전투자
+            cash = int(row['ord_psbl_cash'])
         elif 'prvs_rcdl_excc_amt' in row:
-            cash = int(row['prvs_rcdl_excc_amt']) # 모의투자
+            cash = int(row['prvs_rcdl_excc_amt'])
         elif 'dnca_tot_amt' in row:
             cash = int(row['dnca_tot_amt'])
             
@@ -160,10 +173,10 @@ def get_my_positions(token):
         "INQR_DVSN": "01", "UNPR_DVSN": "01", "FUND_STTL_ICLD_YN": "N",
         "FNCG_AMT_AUTO_RDPT_YN": "N", "PRCS_DVSN": "01", "CTX_AREA_FK100": "", "CTX_AREA_NK100": ""
     }
-    res = requests.get(url, headers=headers, params=params)
-    data = res.json()
+    
+    data = kis_api_request('GET', url, headers=headers, params=params)
     positions = []
-    if data['rt_cd'] == '0' and data['output1']:
+    if data and data.get('rt_cd') == '0' and data.get('output1'):
         for item in data['output1']:
             if int(item['hldg_qty']) > 0:
                 positions.append({
@@ -202,13 +215,14 @@ def send_order(token, buy_sell, symbol_code, qty, price=0):
     headers["hashkey"] = hashkey(body)
     
     url = f"{URL_BASE}/uapi/domestic-stock/v1/trading/order-cash"
-    res = requests.post(url, headers=headers, data=json.dumps(body))
-    data = res.json()
-    if data['rt_cd'] == '0':
+    data = kis_api_request('POST', url, headers=headers, data=json.dumps(body))
+    
+    if data and data.get('rt_cd') == '0':
         print(f"{ts()} [{buy_sell}] 체결 성공! 종목:{symbol_code}, 수량:{qty}, 결과:{data['msg1']}")
         return True
     else:
-        print(f"{ts()} [{buy_sell}] 체결 실패! 사유: {data['msg1']}")
+        msg = data.get('msg1', '통신 실패') if data else '응답 없음'
+        print(f"{ts()} [{buy_sell}] 체결 실패! 사유: {msg}")
         return False
 
 # ----------------- 투자 전략 및 메인 루프 -----------------
