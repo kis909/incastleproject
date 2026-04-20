@@ -93,7 +93,9 @@ def main():
     end_date = "2026-01-01"
     
     print(f"데이터 다운로드 중 ({start_date} ~ {end_date})...")
-    data = yf.download(symbols, start=start_date, end=end_date, group_by="ticker")
+    # auto_adjust=False: 수정주가 소급 보정을 해제하여 실제 체결가 기준으로 백테스트
+    # → 배당/무상증자/주식분할 등으로 인한 '가짜 갭' 오신호 방지
+    data = yf.download(symbols, start=start_date, end=end_date, group_by="ticker", auto_adjust=False)
     print(data.head())
     
     # 재무 건전성 지표 로컬 캐시 활용
@@ -132,8 +134,9 @@ def main():
     
     for sym in symbols:
         if sym in data.columns.levels[0]:
-            df = data[sym].dropna()
+            df = data[sym].dropna(subset=['Close'])
             if len(df) < 120: continue
+            # auto_adjust=False 시 'Close'는 실제 체결가(수정 미적용)
             close_dict[sym] = df['Close']
             open_dict[sym] = df['Open']
             high_dict[sym] = df['High']
@@ -288,10 +291,10 @@ def main():
             for sym in buy_candidates:
                 if sym in positions: continue
                 
-                # [Alpha] 지수 필터 적용: 하락장에서는 신규 매수 금지
-                is_ks = sym.endswith('.KS')
-                index_ok = is_kospi_ok if is_ks else is_kosdaq_ok
-                if not index_ok: continue 
+                # [Alpha] 지수 필터 로직 해제 (현재 운영중인 순정 전략과 동기화)
+                # is_ks = sym.endswith('.KS')
+                # index_ok = is_kospi_ok if is_ks else is_kosdaq_ok
+                # if not index_ok: continue 
 
                 c_price = close_df.at[current_date, sym]
                 if pd.isna(c_price): continue
@@ -431,6 +434,18 @@ def main():
     report += "| 큰 손실 | -10% 하드 손절 |\n"
     report += "| 장기 횡보 묶임 | 20 거래일 강제청산 |\n"
     report += "| 미수/신용 위험 | 현금 < 1만원 시 매수 중단 |\n"
+
+    report += "\n\n---\n"
+    report += "\n## 8. 전체 거래 내역\n"
+    report += "<details><summary>상세 거래 내역 보기 (접기/펼치기)</summary>\n\n"
+    report += "| 매수일 | 매도일 | 종목코드 | 수익률 | 청산 사유 |\n"
+    report += "|---|---|---|---|---|\n"
+    for _, row in trades_df.iterrows():
+        ret_pct = row['return'] * 100
+        buy_dt = row['buy_date'].strftime('%Y-%m-%d')
+        sell_dt = row['sell_date'].strftime('%Y-%m-%d')
+        report += f"| {buy_dt} | {sell_dt} | {row['symbol']} | {ret_pct:+.2f}% | {row['reason']} |\n"
+    report += "</details>\n"
          
     output_md_path = 'backtest_analysis_2020_2025.md'
     with open(output_md_path, 'w', encoding='utf-8') as f:
