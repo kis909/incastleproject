@@ -11,7 +11,7 @@ from daily_telegram_bot import get_top_tickers_from_naver
 
 def ts():
     """현재 시각 문자열 반환 (로그 타임스탬프용)"""
-    return datetime.datetime.now().strftime('[%H:%M:%S]')
+    return datetime.datetime.now().strftime('[%Y-%m-%d %H:%M:%S]')
 
 # ----------------- KIS API 설정 및 토큰 관리 -----------------
 CONFIG_FILE = "kis_secret.json"
