@@ -233,16 +233,17 @@ def analyze_targets():
     
     # ── 우선주 / ETF 필터링 ──────────────────────────────────────────
     ETF_KEYWORDS = ['KODEX', 'TIGER', 'KBSTAR', 'ARIRANG', 'KOSEF', 'HANARO',
-                    'TIMEFOLIO', 'TREX', 'PLUS', 'ACE', '인덱스', 'ETF']
+                    'TIMEFOLIO', 'TREX', 'PLUS', 'ACE', 'SOL', 'WON', 'KOACT',
+                    'KINDEX', '네비게이터', '히어로즈', '마이티', '파워', '인덱스', 'ETF', 'ETN']
 
     def is_preferred(sym):
-        """우선주 판별: KIS 코드 6자리의 마지막 숫자가 5이면 우선주"""
+        """우선주 판별: KIS 코드 6자리의 마지막 숫자가 5, 7, 9, K, L, M 등이면 우선주이나 보통 5,7,K 사용. 일단 5, 7 처리"""
         code = sym.replace('.KS', '').replace('.KQ', '')
-        return len(code) == 6 and code[-1] == '5'
+        return len(code) == 6 and code[-1] in ['5', '7', '9', 'K', 'L', 'M']
 
     def is_etf(sym):
-        """ETF 판별: 종목명에 ETF 브랜드 키워드 포함 여부"""
-        name = symbol_to_name.get(sym, '')
+        """ETF/ETN 판별: 종목명에 ETF 브랜드 키워드 포함 여부 (대소문자 무시)"""
+        name = symbol_to_name.get(sym, '').upper()
         return any(kw in name for kw in ETF_KEYWORDS)
 
     before = len(symbols)

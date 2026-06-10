@@ -28,12 +28,13 @@ from daily_telegram_bot import get_top_tickers_from_naver
 
 def is_preferred(sym):
     code = sym.replace('.KS', '').replace('.KQ', '')
-    return len(code) == 6 and code[-1] == '5'
+    return len(code) == 6 and code[-1] in ['5', '7', '9', 'K', 'L', 'M']
 
 def is_etf(sym, name):
     ETF_KEYWORDS = ['KODEX', 'TIGER', 'KBSTAR', 'ARIRANG', 'KOSEF', 'HANARO',
-                    'TIMEFOLIO', 'TREX', 'PLUS', 'ACE', '인덱스', 'ETF']
-    return any(kw in name for kw in ETF_KEYWORDS)
+                    'TIMEFOLIO', 'TREX', 'PLUS', 'ACE', 'SOL', 'WON', 'KOACT',
+                    'KINDEX', '네비게이터', '히어로즈', '마이티', '파워', '인덱스', 'ETF', 'ETN']
+    return any(kw in name.upper() for kw in ETF_KEYWORDS)
 
 def check_financials(symbol_kis, symbol_yf):
     # 재무 정보 (부채비율 < 200%, 금융업종 PBR < 0.5, 최근 3년 당기순이익 적자 제외)
